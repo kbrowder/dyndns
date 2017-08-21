@@ -84,7 +84,7 @@ func getExternalIP() net.IP {
 
 func main() {
 	app := cli.App("r53ddns", "Update Route53 with our current dynamic dns address")
-	
+
 	//app.Spec = "ZoneId Domain"
 	var (
 		zoneId = app.StringArg("ZONEID", "", "Zone id in route53")
@@ -92,7 +92,7 @@ func main() {
 	)
 
 	app.Action = func() {
-		fmt.Printf("arg1: %s, %s\n", *zoneId, *domain);
+		fmt.Printf("arg1: %s, %s\n", *zoneId, *domain)
 		myIp := getExternalIP()
 
 		fmt.Printf("External IP Addresss: %v\n", myIp)
