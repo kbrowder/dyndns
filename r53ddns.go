@@ -1,4 +1,3 @@
-
 // Copyright (c) 2017 Kevin Browder
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,9 +19,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/jawher/mow.cli"
 	"github.com/miekg/dns"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -61,7 +60,7 @@ func UpdateRoute53(ipAddress net.IP, hostZoneId string, name string) {
 	fmt.Println(resp)
 }
 
-func main() {
+func getExternalIP() net.IP {
 	client := new(dns.Client)
 
 	m := new(dns.Msg)
@@ -70,17 +69,35 @@ func main() {
 	r, _, err := client.Exchange(m, net.JoinHostPort("resolver1.opendns.com", "53"))
 
 	if r == nil {
-		log.Fatalf("*** error: %s\n", err.Error())
+		panic(err)
 	}
 
 	if r.Rcode != dns.RcodeSuccess {
-		log.Fatalf(" *** invalid answer name %s after A query for %s\n", os.Args[1], os.Args[1])
+		panic(err)
 	}
-
 	if t, ok := r.Answer[0].(*dns.A); ok {
 		myIp := t.A
+		return myIp
+	}
+	panic("Couldn't get an IP")
+}
+
+func main() {
+	app := cli.App("r53ddns", "Update Route53 with our current dynamic dns address")
+	
+	//app.Spec = "ZoneId Domain"
+	var (
+		zoneId = app.StringArg("ZONEID", "", "Zone id in route53")
+		domain = app.StringArg("DOMAIN", "", "Domain name to update (usually A record)")
+	)
+
+	app.Action = func() {
+		fmt.Printf("arg1: %s, %s\n", *zoneId, *domain);
+		myIp := getExternalIP()
+
 		fmt.Printf("External IP Addresss: %v\n", myIp)
-		lastUpdateFile := ".lastupdate"
+		domainName := *domain
+		lastUpdateFile := fmt.Sprintf(".lastupdate.%s", domainName)
 		if _, err := os.Stat(lastUpdateFile); os.IsNotExist(err) {
 			ioutil.WriteFile(lastUpdateFile, []byte(""), 0600)
 		}
@@ -91,12 +108,12 @@ func main() {
 		lastIpAddress := net.ParseIP(strings.TrimSpace(string(data)))
 		if !(myIp.Equal(lastIpAddress)) {
 			fmt.Printf("IP Changed, updating route53\n")
-			UpdateRoute53(myIp, os.Args[1], os.Args[2])
+			UpdateRoute53(myIp, *zoneId, domainName)
 			ioutil.WriteFile(lastUpdateFile, []byte(myIp.String()), 0600)
 		} else {
 			fmt.Printf("IP Unchanged\n")
 		}
-
-		return
 	}
+
+	app.Run(os.Args)
 }
